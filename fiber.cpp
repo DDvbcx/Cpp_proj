@@ -132,6 +132,41 @@ void Fiber::resume() {
     }
 }
 
+void Fiber::yield() {
+    assert(m_state==RUNNING || m_state==TREM);
+
+    if (m_state != TERM) {
+        m_state = READY;
+    }
+
+    if (m_runInScheduler) {
+        SetThis(t_scheduler_fiber);
+        if (swapcontext(&m_ctx, &(t_scheduler_fiber->m_ctx))) {
+            std::cerr << "yield() to t_scheduler_fiber failed\n";
+            pthread_exit(NULL);
+        }
+    }else {
+        SetThis(t_thread_fiber.get());
+        if (swapcontext(&m_ctx, &(t_thread_fiber->m_ctx))) {
+            std::cerr << "yield() to t_thread_fiber failed\n";
+            pthread_exit(NULL);
+        }
+    }
+}
+
+void Fiber::MainFunc(){
+    std::shared_ptr<Fiber> cur = GetThis();
+    assert(cur!=nullptr);
+
+    cur->m_cb();
+    cur->m_cb = nullptr;
+    cur->m_state = TERM;
+
+    auto raw_ptr = cur.get();
+    cur.reset();
+    raw_ptr->yield();
+}
+
 }
 
 
